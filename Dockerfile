@@ -4,16 +4,14 @@ FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update and install dependencies
+#  - curl - npm build
+#
 RUN apt-get update && \
     apt-get install -y \
         vim \
-        curl \
-        gnupg \
-        ca-certificates \
-        git \
-        openssh-client \
         bash \
-        build-essential
+        curl \
+        exuberant-ctags
 
 # Install latest Node.js via NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
@@ -22,15 +20,21 @@ RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
 # Install GitHub Copilot CLI globally
 RUN npm install -g @github/copilot
 
-# Create user to match host UID/GID (for mounting home)
-ARG USERNAME=hostuser
+# Create user to match host user
+ARG USERNAME=user
 ARG USER_UID=1001
 ARG USER_GID=1001
-RUN echo "$USER_GID $USERNAME"
-RUN groupadd --gid $USER_GID $USERNAME && \
-    useradd --uid $USER_UID --gid $USER_GID --create-home --home-dir /home/$USERNAME $USERNAME
+ARG USER_HOME=/home/user
+RUN if ! getent group $USER_GID >/dev/null; then \
+        groupadd --gid $USER_GID $USERNAME; \
+    fi && \
+    if ! getent passwd $USER_UID >/dev/null; then \
+        useradd --uid $USER_UID --gid $USER_GID --no-create-home --home-dir $USER_HOME $USERNAME; \
+    else \
+        EXISTING_USER=$(getent passwd $USER_UID | cut -d: -f1) && \
+        usermod -l $USERNAME -d $USER_HOME -g $USER_GID $EXISTING_USER; \
+    fi
 
-WORKDIR /home/$USERNAME
 USER $USERNAME
 
 CMD ["/bin/bash"]
